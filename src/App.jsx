@@ -63,7 +63,7 @@ export default function App() {
     });
   };
 
-  // Generate MCQs from the uploaded PDF or image using Gemini API
+  // Generate MCQs from the uploaded PDF or image using Gemini API with Fallback
   const handleGenerateQuiz = async () => {
     if (!file) return alert('Please select a PDF or image file first!');
     setLoading(true);
@@ -86,10 +86,21 @@ export default function App() {
         ]
       `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: [filePart, prompt],
-      });
+      let response;
+      try {
+        // Try with the primary model first
+        response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: [filePart, prompt],
+        });
+      } catch (primaryError) {
+        console.warn('Primary model busy, switching to fallback model...');
+        // Fallback model if primary gives 503 or overload error
+        response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [filePart, prompt],
+        });
+      }
 
       const rawText = response.text || '';
       const cleanJson = rawText.replace(/```json|```/g, '').trim();
@@ -99,7 +110,7 @@ export default function App() {
       setTimerActive(true); // Start timer once questions are loaded
     } catch (error) {
       console.error('Error generating quiz:', error);
-      alert('Failed to generate quiz. Please try again.');
+      alert('Failed to generate quiz due to high server traffic. Please try again.');
     }
     setLoading(false);
   };
