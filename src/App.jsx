@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, CheckCircle, XCircle, Award, History } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText } from 'lucide-react';
 
-// API සම්බන්ධතා
+// Initialize Gemini AI and Supabase clients
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 
@@ -15,18 +15,38 @@ export default function App() {
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [history, setHistory] = useState([]);
+  const [seconds, setSeconds] = useState(0);
+  const [timerActive, setTimerActive] = useState(false);
 
+  // Load past quiz history on component mount
   useEffect(() => {
     fetchHistory();
   }, []);
 
-  // Database එකෙන් පරණ ලකුණු ගැනීම
+  // Handle live quiz timer
+  useEffect(() => {
+    let interval = null;
+    if (timerActive && !submitted) {
+      interval = setInterval(() => {
+        setSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [timerActive, submitted]);
+
+  // Fetch recent quiz records from Supabase
   const fetchHistory = async () => {
-    const { data } = await supabase.from('quizzes').select('*').order('created_at', { ascending: false }).limit(5);
+    const { data } = await supabase
+      .from('quizzes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
     if (data) setHistory(data);
   };
 
-  // File එක AI SDK එකට ගැලපෙන format එකකට හැරවීම (Google Gen AI SDK standard format)
+  // Convert uploaded file into base64 inlineData format for Gemini SDK
   const fileToGenerativePart = async (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -43,13 +63,14 @@ export default function App() {
     });
   };
 
-  // PDF/Photo එකෙන් Quiz එක හදන function එක
+  // Generate MCQs from the uploaded PDF or image using Gemini API
   const handleGenerateQuiz = async () => {
     if (!file) return alert('කරුණාකර PDF හෝ Photo එකක් තෝරන්න!');
     setLoading(true);
     setSubmitted(false);
     setAnswers({});
     setQuestions([]);
+    setSeconds(0);
 
     try {
       const filePart = await fileToGenerativePart(file);
@@ -65,25 +86,27 @@ export default function App() {
         ]
       `;
 
-      // නිවැරදි Google Gen AI SDK model call එක
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: [filePart, prompt],
       });
 
       const rawText = response.text || '';
       const cleanJson = rawText.replace(/```json|```/g, '').trim();
       const parsedQuestions = JSON.parse(cleanJson);
+      
       setQuestions(parsedQuestions);
+      setTimerActive(true); // Start timer once questions are loaded
     } catch (error) {
-      console.error(error);
+      console.error('Error generating quiz:', error);
       alert('Quiz එක හදද්දී දෝෂයක් ආවා. නැවත උත්සාහ කරන්න.');
     }
     setLoading(false);
   };
 
-  // උත්තර පරීක්ෂා කර Database එකේ Save කිරීම
+  // Calculate score and save the attempt to Supabase
   const handleSubmit = async () => {
+    setTimerActive(false);
     let currentScore = 0;
     questions.forEach((q, index) => {
       if (answers[index] === q.correctAnswer) currentScore++;
@@ -91,7 +114,6 @@ export default function App() {
     setScore(currentScore);
     setSubmitted(true);
 
-    // Supabase Database එකට Save කිරීම
     const { error } = await supabase.from('quizzes').insert([
       {
         title: file ? file.name : 'Untitled Quiz',
@@ -101,106 +123,160 @@ export default function App() {
       },
     ]);
 
-    if (error) {
-      console.error('Supabase Error:', error);
-    } else {
+    if (!error) {
       fetchHistory();
     }
   };
 
+  // Format elapsed seconds into MM:SS
+  const formatTime = (sec) => {
+    const mins = Math.floor(sec / 60);
+    const secs = sec % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif', color: '#1e293b' }}>
-      <header style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '2.2rem', color: '#2563eb', marginBottom: '8px' }}>AI Study Quiz Generator 🧠</h1>
-        <p style={{ color: '#64748b' }}>ඕනෑම PDF හෝ Note Photo එකක් upload කර ක්ෂණිකව Quiz එකක් හදාගන්න</p>
-      </header>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif', color: '#f8fafc' }}>
+      <div style={{ maxWidth: '850px', margin: '0 auto' }}>
+        
+        {/* Application Header */}
+        <header style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', background: 'rgba(99, 102, 241, 0.1)', padding: '8px 16px', borderRadius: '50px', border: '1px solid rgba(99, 102, 241, 0.3)', marginBottom: '15px' }}>
+            <Sparkles size={18} color="#818cf8" />
+            <span style={{ fontSize: '0.85rem', color: '#c7d2fe', fontWeight: '600', letterSpacing: '0.5px' }}>POWERED BY GEMINI AI & SUPABASE</span>
+          </div>
+          <h1 style={{ fontSize: '2.8rem', fontWeight: '800', background: 'linear-gradient(to right, #818cf8, #c084fc, #f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '12px' }}>
+            AI Study Quiz Generator 🧠
+          </h1>
+          <p style={{ color: '#94a3b8', fontSize: '1.1rem' }}>ඕනෑම PDF හෝ Note Photo එකක් upload කර ක්ෂණිකව Smart Quiz එකක් සාදාගන්න</p>
+        </header>
 
-      {/* File Upload Section */}
-      <div style={{ border: '2px dashed #93c5fd', borderRadius: '12px', padding: '30px', textAlign: 'center', backgroundColor: '#eff6ff', marginBottom: '25px' }}>
-        <Upload size={40} color="#2563eb" style={{ marginBottom: '10px' }} />
-        <br />
-        <input
-          type="file"
-          accept="application/pdf, image/*"
-          onChange={(e) => setFile(e.target.files[0])}
-          style={{ marginBottom: '15px' }}
-        />
-        <br />
-        <button
-          onClick={handleGenerateQuiz}
-          disabled={loading}
-          style={{
-            backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '12px 24px',
-            borderRadius: '8px', fontSize: '1rem', cursor: 'pointer', fontWeight: 'bold'
-          }}
-        >
-          {loading ? 'AI මගින් ප්‍රශ්න සකසමින් පවතී...' : 'Generate Quiz ✨'}
-        </button>
+        {/* File Upload Card */}
+        <div style={{ background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '20px', padding: '35px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', marginBottom: '30px' }}>
+          <div style={{ width: '70px', height: '70px', background: 'rgba(99, 102, 241, 0.15)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+            <Upload size={32} color="#818cf8" />
+          </div>
+          
+          <input
+            type="file"
+            accept="application/pdf, image/*"
+            onChange={(e) => setFile(e.target.files[0])}
+            style={{ marginBottom: '20px', color: '#cbd5e1', fontSize: '0.95rem' }}
+          />
+
+          <br />
+          <button
+            onClick={handleGenerateQuiz}
+            disabled={loading}
+            style={{
+              background: loading ? '#475569' : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+              color: 'white', border: 'none', padding: '14px 32px',
+              borderRadius: '12px', fontSize: '1.1rem', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold',
+              boxShadow: '0 10px 20px rgba(99, 102, 241, 0.4)', transition: 'all 0.3s ease',
+              display: 'inline-flex', alignItems: 'center', gap: '10px'
+            }}
+          >
+            {loading ? 'AI මගින් ප්‍රශ්න සකසමින් පවතී...' : 'Generate Quiz ✨'}
+          </button>
+        </div>
+
+        {/* Active Quiz Timer Bar */}
+        {questions.length > 0 && !submitted && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(30, 41, 59, 0.8)', padding: '15px 25px', borderRadius: '14px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <span style={{ fontWeight: '600', color: '#e2e8f0' }}>🎯 ප්‍රශ්න මාලාව සූදානම්!</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontWeight: 'bold' }}>
+              <Clock size={18} />
+              <span>ගතවූ කාලය: {formatTime(seconds)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Questions List Section */}
+        {questions.length > 0 && (
+          <div style={{ background: 'rgba(30, 41, 59, 0.85)', backdropFilter: 'blur(12px)', padding: '35px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', marginBottom: '40px' }}>
+            {questions.map((q, qIndex) => (
+              <div key={qIndex} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <h3 style={{ marginBottom: '15px', fontSize: '1.2rem', color: '#f1f5f9', lineHeight: '1.5' }}>
+                  {qIndex + 1}. {q.question}
+                </h3>
+                {q.options.map((opt, optIndex) => {
+                  const isSelected = answers[qIndex] === optIndex;
+                  const isCorrect = q.correctAnswer === optIndex;
+                  let bgOption = 'rgba(15, 23, 42, 0.6)';
+                  let borderColor = 'rgba(255, 255, 255, 0.1)';
+
+                  if (isSelected) {
+                    bgOption = 'rgba(99, 102, 241, 0.2)';
+                    borderColor = '#818cf8';
+                  }
+
+                  if (submitted) {
+                    if (isCorrect) {
+                      bgOption = 'rgba(34, 197, 94, 0.2)';
+                      borderColor = '#22c55e';
+                    } else if (isSelected && !isCorrect) {
+                      bgOption = 'rgba(239, 68, 68, 0.2)';
+                      borderColor = '#ef4444';
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={optIndex}
+                      onClick={() => !submitted && setAnswers({ ...answers, [qIndex]: optIndex })}
+                      style={{
+                        padding: '14px 18px', margin: '10px 0', borderRadius: '12px', cursor: submitted ? 'default' : 'pointer',
+                        backgroundColor: bgOption, border: `1px solid ${borderColor}`,
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <span style={{ color: '#e2e8f0', fontSize: '1rem' }}>{opt}</span>
+                      {submitted && isCorrect && <CheckCircle color="#22c55e" size={20} />}
+                      {submitted && isSelected && !isCorrect && <XCircle color="#ef4444" size={20} />}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Submit Button or Final Score Display */}
+            {!submitted ? (
+              <button
+                onClick={handleSubmit}
+                style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 10px 20px rgba(34, 197, 94, 0.3)', transition: 'all 0.3s ease' }}
+              >
+                Submit Answers & Save Score
+              </button>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '16px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                <Award size={56} color="#22c55e" style={{ marginBottom: '10px' }} />
+                <h2 style={{ fontSize: '2rem', color: '#4ade80', marginBottom: '8px' }}>ඔබේ ලකුණු: {score} / {questions.length}</h2>
+                <p style={{ color: '#94a3b8', fontSize: '1rem' }}>කාලය: {formatTime(seconds)} | ලකුණු Database එකේ සාර්ථකව Save විය!</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recent Quiz History Section */}
+        {history.length > 0 && (
+          <div style={{ background: 'rgba(30, 41, 59, 0.6)', backdropFilter: 'blur(12px)', padding: '30px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.3rem', marginBottom: '20px', color: '#cbd5e1' }}>
+              <History size={22} color="#818cf8" /> මෑතකදී කළ Quizzes ඉතිහාසය
+            </h3>
+            {history.map((item) => (
+              <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', backgroundColor: 'rgba(15, 23, 42, 0.5)', margin: '10px 0', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#e2e8f0' }}>
+                  <FileText size={18} color="#94a3b8" /> {item.title}
+                </span>
+                <span style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', padding: '6px 14px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.9rem', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                  ලකුණු: {item.score} / {item.total}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
-
-      {/* Questions Section */}
-      {questions.length > 0 && (
-        <div style={{ backgroundColor: '#ffffff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-          {questions.map((q, qIndex) => (
-            <div key={qIndex} style={{ marginBottom: '25px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-              <h3 style={{ marginBottom: '12px' }}>{qIndex + 1}. {q.question}</h3>
-              {q.options.map((opt, optIndex) => {
-                const isSelected = answers[qIndex] === optIndex;
-                const isCorrect = q.correctAnswer === optIndex;
-                let bgColor = isSelected ? '#dbeafe' : '#f8fafc';
-                if (submitted) {
-                  if (isCorrect) bgColor = '#dcfce7';
-                  else if (isSelected && !isCorrect) bgColor = '#fee2e2';
-                }
-
-                return (
-                  <div
-                    key={optIndex}
-                    onClick={() => !submitted && setAnswers({ ...answers, [qIndex]: optIndex })}
-                    style={{
-                      padding: '12px', margin: '8px 0', borderRadius: '8px', cursor: 'pointer',
-                      backgroundColor: bgColor, border: isSelected ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}
-                  >
-                    <span>{opt}</span>
-                    {submitted && isCorrect && <CheckCircle color="#16a34a" size={20} />}
-                    {submitted && isSelected && !isCorrect && <XCircle color="#dc2626" size={20} />}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-
-          {!submitted ? (
-            <button
-              onClick={handleSubmit}
-              style={{ width: '100%', padding: '14px', backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' }}
-            >
-              Submit Answers
-            </button>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '8px' }}>
-              <Award size={48} color="#16a34a" />
-              <h2>ඔබේ ලකුණු: {score} / {questions.length}</h2>
-              <p>ලකුණු Database එකේ සාර්ථකව Save විය!</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Recent History from Database */}
-      {history.length > 0 && (
-        <div style={{ marginTop: '40px' }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><History size={20} /> මෑතකදී කළ Quizzes (Database History)</h3>
-          {history.map((item) => (
-            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#f1f5f9', margin: '8px 0', borderRadius: '8px' }}>
-              <span>📄 {item.title}</span>
-              <strong>ලකුණු: {item.score} / {item.total}</strong>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
