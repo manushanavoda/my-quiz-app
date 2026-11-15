@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText, Check, LogOut } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText, Check, LogOut, Sliders } from 'lucide-react';
 
 // Initialize Gemini AI and Supabase clients
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
@@ -14,6 +14,9 @@ export default function App() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const [file, setFile] = useState(null);
+  const [numQuestions, setNumQuestions] = useState(5); // Default 5 questions
+  const [difficulty, setDifficulty] = useState('Medium'); // Default Medium difficulty
+
   const [loading, setLoading] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -63,16 +66,11 @@ export default function App() {
     e.preventDefault();
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        alert(error.message);
-      } else {
-        alert('Sign up successful! Please check your email or log in.');
-      }
+      if (error) alert(error.message);
+      else alert('Sign up successful! Please check your email or log in.');
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        alert(error.message);
-      }
+      if (error) alert(error.message);
     }
   };
 
@@ -108,7 +106,7 @@ export default function App() {
     });
   };
 
-  // Generate MCQs from uploaded file with Fallback
+  // Generate MCQs using Gemini API with Fallback and custom preferences
   const handleGenerateQuiz = async () => {
     if (!file) return alert('Please select a PDF or image file first!');
     setLoading(true);
@@ -120,7 +118,8 @@ export default function App() {
     try {
       const filePart = await fileToGenerativePart(file);
       const prompt = `
-        Analyze this document or image and create 5 multiple-choice questions (MCQs).
+        Analyze this document or image and create exactly ${numQuestions} multiple-choice questions (MCQs).
+        Difficulty level: ${difficulty}.
         Return ONLY a valid JSON array with no markdown formatting. Format:
         [
           {
@@ -140,7 +139,7 @@ export default function App() {
       } catch (primaryError) {
         console.warn('Primary model busy, switching to fallback model...');
         response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-2.0-flash',
           contents: [filePart, prompt],
         });
       }
@@ -170,7 +169,7 @@ export default function App() {
 
     const { error } = await supabase.from('quizzes').insert([
       {
-        title: file ? file.name : 'Untitled Quiz',
+        title: file ? `${file.name} (${difficulty})` : 'Untitled Quiz',
         questions: questions,
         score: currentScore,
         total: questions.length,
@@ -253,13 +252,13 @@ export default function App() {
         ) : (
           /* IF LOGGED IN: Show Quiz Generator App */
           <>
-            {/* File Upload Card */}
+            {/* File Upload & Settings Card */}
             <div style={{ background: 'rgba(20, 27, 45, 0.75)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px', padding: '40px', textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', marginBottom: '35px' }}>
               <div style={{ width: '75px', height: '75px', background: 'rgba(99, 102, 241, 0.15)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
                 <Upload size={34} color="#818cf8" />
               </div>
 
-              <label style={{ display: 'inline-block', background: 'rgba(99, 102, 241, 0.15)', color: '#c7d2fe', padding: '12px 24px', borderRadius: '12px', cursor: 'pointer', border: '1px solid rgba(99, 102, 241, 0.3)', fontWeight: '600', marginBottom: '15px', transition: 'all 0.2s ease' }}>
+              <label style={{ display: 'inline-block', background: 'rgba(99, 102, 241, 0.15)', color: '#c7d2fe', padding: '12px 24px', borderRadius: '12px', cursor: 'pointer', border: '1px solid rgba(99, 102, 241, 0.3)', fontWeight: '600', marginBottom: '20px', transition: 'all 0.2s ease' }}>
                 {file ? file.name : '📂 Choose PDF or Image File'}
                 <input
                   type="file"
@@ -272,6 +271,39 @@ export default function App() {
               {file && (
                 <p style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '20px' }}>Selected: {file.name}</p>
               )}
+
+              {/* Quiz Configuration Options (Number of Questions & Difficulty) */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '25px', flexWrap: 'wrap' }}>
+                
+                {/* Number of Questions Selector */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 20px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '6px', fontWeight: 'bold' }}>Number of Questions:</label>
+                  <select
+                    value={numQuestions}
+                    onChange={(e) => setNumQuestions(Number(e.target.value))}
+                    style={{ background: '#1e293b', color: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.95rem', cursor: 'pointer' }}
+                  >
+                    <option value={5}>5 Questions</option>
+                    <option value={10}>10 Questions</option>
+                    <option value={15}>15 Questions</option>
+                  </select>
+                </div>
+
+                {/* Difficulty Level Selector */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 20px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '6px', fontWeight: 'bold' }}>Difficulty Level:</label>
+                  <select
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value)}
+                    style={{ background: '#1e293b', color: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.95rem', cursor: 'pointer' }}
+                  >
+                    <option value="Easy">Easy 🟢</option>
+                    <option value="Medium">Medium 🟡</option>
+                    <option value="Hard">Hard 🔴</option>
+                  </select>
+                </div>
+
+              </div>
 
               <div>
                 <button
@@ -294,7 +326,7 @@ export default function App() {
             {questions.length > 0 && !submitted && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20, 27, 45, 0.85)', padding: '18px 28px', borderRadius: '16px', marginBottom: '25px', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <span style={{ fontWeight: '600', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Check size={18} color="#22c55e" /> Quiz questions ready!
+                  <Check size={18} color="#22c55e" /> Quiz ready ({difficulty} - {questions.length} Questions)!
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontWeight: 'bold', background: 'rgba(56, 189, 248, 0.1)', padding: '6px 14px', borderRadius: '10px' }}>
                   <Clock size={18} />
