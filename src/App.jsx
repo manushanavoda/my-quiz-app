@@ -71,10 +71,13 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  // Fetch only the logged-in user's quiz history
   const fetchHistory = async () => {
+    if (!user) return;
     const { data } = await supabase
       .from('quizzes')
       .select('*')
+      .eq('user_id', user.id) // Filter by logged-in user's ID
       .order('created_at', { ascending: false })
       .limit(5);
     if (data) setHistory(data);
@@ -143,6 +146,7 @@ export default function App() {
     setLoading(false);
   };
 
+  // Save quiz with the logged-in user's ID
   const handleSubmit = async () => {
     setTimerActive(false);
     let currentScore = 0;
@@ -152,12 +156,15 @@ export default function App() {
     setScore(currentScore);
     setSubmitted(true);
 
+    if (!user) return;
+
     const { error } = await supabase.from('quizzes').insert([
       {
         title: file ? `${file.name} (${difficulty})` : 'Untitled Quiz',
         questions: questions,
         score: currentScore,
         total: questions.length,
+        user_id: user.id, // Save user ID so only this user can see it
       },
     ]);
 
@@ -388,7 +395,7 @@ export default function App() {
                     {incorrectQuestions.length > 0 ? (
                       <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '18px', padding: '30px' }}>
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f87171', fontSize: '1.4rem', marginBottom: '20px' }}>
-                          <AlertCircle size={24} /> Mistakes Review ({incorrectQuestions.length} Questions to Review)
+                          <AlertCircle size24 /> Mistakes Review ({incorrectQuestions.length} Questions to Review)
                         </h3>
                         <p style={{ color: '#cbd5e1', marginBottom: '20px', fontSize: '0.95rem' }}>Here are the questions you answered incorrectly, along with the correct answers:</p>
                         
