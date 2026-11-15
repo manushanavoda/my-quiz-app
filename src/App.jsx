@@ -14,7 +14,7 @@ export default function App() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const [file, setFile] = useState(null);
-  const [numQuestions, setNumQuestions] = useState(5);
+  const [numQuestions, setNumQuestions] = useState(5); // Default 5
   const [difficulty, setDifficulty] = useState('Medium');
 
   const [loading, setLoading] = useState(false);
@@ -39,47 +39,38 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch history when user changes
   useEffect(() => {
-    if (user) {
-      fetchHistory();
-    } else {
-      setHistory([]);
-    }
+    if (user) fetchHistory();
+    else setHistory([]);
   }, [user]);
 
   // Handle live quiz timer
   useEffect(() => {
     let interval = null;
     if (timerActive && !submitted) {
-      interval = setInterval(() => {
-        setSeconds((prev) => prev + 1);
-      }, 1000);
+      interval = setInterval(() => setSeconds((prev) => prev + 1), 1000);
     } else {
       clearInterval(interval);
     }
     return () => clearInterval(interval);
   }, [timerActive, submitted]);
 
-  // Handle Login / Sign Up
   const handleAuth = async (e) => {
     e.preventDefault();
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) alert(error.message);
-      else alert('Sign up successful! Please check your email or log in.');
+      else alert('Sign up successful! Please log in.');
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) alert(error.message);
     }
   };
 
-  // Handle Logout
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
-  // Fetch recent quiz records from Supabase
   const fetchHistory = async () => {
     const { data } = await supabase
       .from('quizzes')
@@ -89,24 +80,20 @@ export default function App() {
     if (data) setHistory(data);
   };
 
-  // Convert uploaded file into base64 inlineData format for Gemini SDK
   const fileToGenerativePart = async (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64Data = reader.result.split(',')[1];
         resolve({
-          inlineData: {
-            data: base64Data,
-            mimeType: file.type
-          }
+          inlineData: { data: base64Data, mimeType: file.type }
         });
       };
       reader.readAsDataURL(file);
     });
   };
 
-  // Generate MCQs using Gemini API with optimized speed, fallback, and user options
+  // Generate MCQs using Gemini AI with Fallback
   const handleGenerateQuiz = async () => {
     if (!file) return alert('Please select a PDF or image file first!');
     setLoading(true);
@@ -118,7 +105,7 @@ export default function App() {
     try {
       const filePart = await fileToGenerativePart(file);
       const prompt = `
-        Read this document and generate exactly ${numQuestions} multiple-choice questions (MCQs) of ${difficulty} difficulty.
+        Read this document carefully and generate exactly ${numQuestions} multiple-choice questions (MCQs) of ${difficulty} difficulty.
         Return ONLY a raw JSON array. No markdown formatting, no backticks, no extra text. Format:
         [
           {
@@ -151,12 +138,11 @@ export default function App() {
       setTimerActive(true);
     } catch (error) {
       console.error('Error generating quiz:', error);
-      alert('Failed to generate quiz due to high server traffic. Please try again.');
+      alert('Failed to generate quiz due to high server traffic or large question count. Please try again.');
     }
     setLoading(false);
   };
 
-  // Calculate score and save to Supabase
   const handleSubmit = async () => {
     setTimerActive(false);
     let currentScore = 0;
@@ -175,11 +161,7 @@ export default function App() {
       },
     ]);
 
-    if (!error) {
-      fetchHistory();
-    } else {
-      console.error('Error saving score:', error.message);
-    }
+    if (!error) fetchHistory();
   };
 
   const formatTime = (sec) => {
@@ -216,7 +198,6 @@ export default function App() {
           <p style={{ color: '#94a3b8', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>Upload any PDF or Note Photo to instantly generate a smart quiz</p>
         </header>
 
-        {/* IF NOT LOGGED IN: Show Login / Sign Up Box */}
         {!user ? (
           <div style={{ background: 'rgba(20, 27, 45, 0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px', padding: '40px', maxWidth: '450px', margin: '0 auto', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', textAlign: 'center' }}>
             <h2 style={{ marginBottom: '20px', color: '#f1f5f9' }}>{isSignUp ? 'Create an Account' : 'Welcome Back! Please Login'}</h2>
@@ -249,9 +230,7 @@ export default function App() {
             </p>
           </div>
         ) : (
-          /* IF LOGGED IN: Show Quiz Generator App */
           <>
-            {/* File Upload & Settings Card */}
             <div style={{ background: 'rgba(20, 27, 45, 0.75)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px', padding: '40px', textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', marginBottom: '35px' }}>
               <div style={{ width: '75px', height: '75px', background: 'rgba(99, 102, 241, 0.15)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
                 <Upload size={34} color="#818cf8" />
@@ -271,10 +250,9 @@ export default function App() {
                 <p style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '20px' }}>Selected: {file.name}</p>
               )}
 
-              {/* Quiz Configuration Options (Number of Questions & Difficulty) */}
               <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '25px', flexWrap: 'wrap' }}>
                 
-                {/* Number of Questions Selector */}
+                {/* Number of Questions Selector (Updated with 25, 30, 40, 50) */}
                 <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 20px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'left' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '6px', fontWeight: 'bold' }}>Number of Questions:</label>
                   <select
@@ -285,10 +263,13 @@ export default function App() {
                     <option value={5}>5 Questions</option>
                     <option value={10}>10 Questions</option>
                     <option value={15}>15 Questions</option>
+                    <option value={25}>25 Questions</option>
+                    <option value={30}>30 Questions</option>
+                    <option value={40}>40 Questions</option>
+                    <option value={50}>50 Questions</option>
                   </select>
                 </div>
 
-                {/* Difficulty Level Selector */}
                 <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 20px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'left' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '6px', fontWeight: 'bold' }}>Difficulty Level:</label>
                   <select
@@ -301,7 +282,6 @@ export default function App() {
                     <option value="Hard">Hard 🔴</option>
                   </select>
                 </div>
-
               </div>
 
               <div>
@@ -319,7 +299,7 @@ export default function App() {
                   {loading ? (
                     <>
                       <Loader2 className="animate-spin" size={20} style={{ animation: 'spin 1s linear infinite' }} />
-                      <span>AI is reading notes & generating... ⏳</span>
+                      <span>AI is generating {numQuestions} questions... ⏳</span>
                     </>
                   ) : (
                     'Generate Quiz ✨'
@@ -328,7 +308,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Active Quiz Timer Bar */}
             {questions.length > 0 && !submitted && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20, 27, 45, 0.85)', padding: '18px 28px', borderRadius: '16px', marginBottom: '25px', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <span style={{ fontWeight: '600', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -341,7 +320,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Questions List Section */}
             {questions.length > 0 && (
               <div style={{ background: 'rgba(20, 27, 45, 0.85)', backdropFilter: 'blur(16px)', padding: '40px', borderRadius: '24px', border: '1px solid rgba(255, 255, 255, 0.08)', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', marginBottom: '40px' }}>
                 {questions.map((q, qIndex) => (
@@ -377,7 +355,7 @@ export default function App() {
                           style={{
                             padding: '16px 20px', margin: '12px 0', borderRadius: '14px', cursor: submitted ? 'default' : 'pointer',
                             backgroundColor: bgOption, border: `1px solid ${borderColor}`,
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s ease'
+                            display: 'flex', justifyContent: 'space-linejoin', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s ease'
                           }}
                         >
                           <span style={{ color: '#e2e8f0', fontSize: '1rem' }}>{opt}</span>
@@ -406,7 +384,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Recent Quiz History Section */}
             {history.length > 0 && (
               <div style={{ background: 'rgba(20, 27, 45, 0.75)', backdropFilter: 'blur(16px)', padding: '35px', borderRadius: '24px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.3rem', marginBottom: '20px', color: '#cbd5e1' }}>
