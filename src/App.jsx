@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText, Check, LogOut, Sliders } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText, Check, LogOut, Loader2 } from 'lucide-react';
 
 // Initialize Gemini AI and Supabase clients
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
@@ -14,8 +14,8 @@ export default function App() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const [file, setFile] = useState(null);
-  const [numQuestions, setNumQuestions] = useState(5); // Default 5 questions
-  const [difficulty, setDifficulty] = useState('Medium'); // Default Medium difficulty
+  const [numQuestions, setNumQuestions] = useState(5);
+  const [difficulty, setDifficulty] = useState('Medium');
 
   const [loading, setLoading] = useState(false);
   const [questions, setQuestions] = useState([]);
@@ -106,7 +106,7 @@ export default function App() {
     });
   };
 
-  // Generate MCQs using Gemini API with Fallback and custom preferences
+  // Generate MCQs using Gemini API with optimized speed, fallback, and user options
   const handleGenerateQuiz = async () => {
     if (!file) return alert('Please select a PDF or image file first!');
     setLoading(true);
@@ -118,9 +118,8 @@ export default function App() {
     try {
       const filePart = await fileToGenerativePart(file);
       const prompt = `
-        Analyze this document or image and create exactly ${numQuestions} multiple-choice questions (MCQs).
-        Difficulty level: ${difficulty}.
-        Return ONLY a valid JSON array with no markdown formatting. Format:
+        Read this document and generate exactly ${numQuestions} multiple-choice questions (MCQs) of ${difficulty} difficulty.
+        Return ONLY a raw JSON array. No markdown formatting, no backticks, no extra text. Format:
         [
           {
             "question": "Question text?",
@@ -317,7 +316,14 @@ export default function App() {
                     display: 'inline-flex', alignItems: 'center', gap: '10px'
                   }}
                 >
-                  {loading ? 'AI is generating questions...' : 'Generate Quiz ✨'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                      <span>AI is reading notes & generating... ⏳</span>
+                    </>
+                  ) : (
+                    'Generate Quiz ✨'
+                  )}
                 </button>
               </div>
             </div>
