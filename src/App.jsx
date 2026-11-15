@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
-import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText, Check, LogOut, Loader2 } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Award, History, Sparkles, Clock, FileText, Check, LogOut, Loader2, AlertCircle } from 'lucide-react';
 
 // Initialize Gemini AI and Supabase clients
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
@@ -14,7 +14,7 @@ export default function App() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const [file, setFile] = useState(null);
-  const [numQuestions, setNumQuestions] = useState(5); // Default 5
+  const [numQuestions, setNumQuestions] = useState(5);
   const [difficulty, setDifficulty] = useState('Medium');
 
   const [loading, setLoading] = useState(false);
@@ -170,6 +170,9 @@ export default function App() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  // Filter incorrect answers for review
+  const incorrectQuestions = questions.filter((q, index) => answers[index] !== q.correctAnswer);
+
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #090d16 0%, #13182e 100%)', padding: '40px 20px', fontFamily: 'system-ui, -apple-system, sans-serif', color: '#f8fafc' }}>
       <div style={{ maxWidth: '850px', margin: '0 auto' }}>
@@ -251,8 +254,6 @@ export default function App() {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '25px', flexWrap: 'wrap' }}>
-                
-                {/* Number of Questions Selector (Updated with 25, 30, 40, 50) */}
                 <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 20px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'left' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '6px', fontWeight: 'bold' }}>Number of Questions:</label>
                   <select
@@ -355,7 +356,7 @@ export default function App() {
                           style={{
                             padding: '16px 20px', margin: '12px 0', borderRadius: '14px', cursor: submitted ? 'default' : 'pointer',
                             backgroundColor: bgOption, border: `1px solid ${borderColor}`,
-                            display: 'flex', justifyContent: 'space-linejoin', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s ease'
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s ease'
                           }}
                         >
                           <span style={{ color: '#e2e8f0', fontSize: '1rem' }}>{opt}</span>
@@ -375,10 +376,45 @@ export default function App() {
                     Submit Answers & Save Score 🚀
                   </button>
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '35px', background: 'rgba(15, 23, 42, 0.9)', borderRadius: '18px', border: '1px solid rgba(34, 197, 94, 0.4)' }}>
-                    <Award size={60} color="#22c55e" style={{ marginBottom: '12px' }} />
-                    <h2 style={{ fontSize: '2.2rem', color: '#4ade80', marginBottom: '8px' }}>Your Score: {score} / {questions.length}</h2>
-                    <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>Time Taken: {formatTime(seconds)} | Score successfully saved to Database! 🎉</p>
+                  <div>
+                    {/* Score Card */}
+                    <div style={{ textAlign: 'center', padding: '35px', background: 'rgba(15, 23, 42, 0.9)', borderRadius: '18px', border: '1px solid rgba(34, 197, 94, 0.4)', marginBottom: '30px' }}>
+                      <Award size={60} color="#22c55e" style={{ marginBottom: '12px' }} />
+                      <h2 style={{ fontSize: '2.2rem', color: '#4ade80', marginBottom: '8px' }}>Your Score: {score} / {questions.length}</h2>
+                      <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>Time Taken: {formatTime(seconds)} | Score successfully saved to Database! 🎉</p>
+                    </div>
+
+                    {/* Review Mistakes Section */}
+                    {incorrectQuestions.length > 0 ? (
+                      <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '18px', padding: '30px' }}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f87171', fontSize: '1.4rem', marginBottom: '20px' }}>
+                          <AlertCircle size={24} /> Mistakes Review ({incorrectQuestions.length} Questions to Review)
+                        </h3>
+                        <p style={{ color: '#cbd5e1', marginBottom: '20px', fontSize: '0.95rem' }}>Here are the questions you answered incorrectly, along with the correct answers:</p>
+                        
+                        {incorrectQuestions.map((q, idx) => {
+                          const originalIndex = questions.indexOf(q);
+                          const userSelectedOption = answers[originalIndex];
+                          return (
+                            <div key={idx} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '14px', marginBottom: '15px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                              <h4 style={{ color: '#f1f5f9', fontSize: '1.05rem', marginBottom: '12px' }}>
+                                {originalIndex + 1}. {q.question}
+                              </h4>
+                              <p style={{ color: '#ef4444', fontSize: '0.9rem', marginBottom: '6px' }}>
+                                ❌ Your Answer: {userSelectedOption !== undefined ? q.options[userSelectedOption] : 'Not Answered'}
+                              </p>
+                              <p style={{ color: '#22c55e', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                                ✅ Correct Answer: {q.options[q.correctAnswer]}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '25px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '18px', color: '#4ade80' }}>
+                        <h3>🌟 Outstanding! You got a 100% Perfect Score! No mistakes to review.</h3>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
